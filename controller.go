@@ -1,19 +1,17 @@
 package main
 
 import (
-	_ "k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/client/unversioned"
-	_ "k8s.io/kubernetes/pkg/healthz"
+	"k8s.io/client-go/kubernetes"
 )
 
 type CaddyIngressController struct {
-	client      *unversioned.Client
+	clientset   *kubernetes.Clientset
 	svcFallback string
 }
 
-func NewIngressController(kubeClient *unversioned.Client, svcFallback string) (*CaddyIngressController, error) {
+func NewIngressController(clientset *kubernetes.Clientset, svcFallback string) (*CaddyIngressController, error) {
 	return &CaddyIngressController{
-		client:      kubeClient,
+		clientset:   clientset,
 		svcFallback: svcFallback,
 	}, nil
 }

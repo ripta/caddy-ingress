@@ -4,36 +4,36 @@ import (
 	"flag"
 	"fmt"
 	_ "net/http"
-	"os"
+	_ "os"
 
 	"github.com/golang/glog"
-	"github.com/spf13/pflag"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/client/unversioned"
-	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
-	_ "k8s.io/kubernetes/pkg/healthz"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
+
+	_ "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var (
-	version = "xxx:REPLACE:DURING:BUILD"
-	flagSet = pflag.NewFlagSet("", pflag.ExitOnError)
+	version    = "xxx:REPLACE:DURING:BUILD"
+	kubeconfig = flag.String("kubeconfig", "/etc/kubernetes/kubeconfig", "Absolute path to the kubeconfig file")
 
-	isInCluster = flagSet.Bool("is-in-cluster", false,
+	isInCluster = flag.Bool("is-in-cluster", false,
 		`Whether the controller is run inside k8s or not (default: false)`)
 
-	svcFallback = flagSet.String("fallback-service", "",
+	svcFallback = flag.String("fallback-service", "",
 		`The name of the fallback service in "namespace/name" format.`)
 )
 
 func main() {
 	glog.Infof("Caddy Ingress Controller version %v", version)
+	flag.Parse()
 
-	flagSet.AddGoFlagSet(flag.CommandLine)
-	flagSet.Parse(os.Args)
-	clientConfig := util.DefaultClientConfig(flagSet)
+	var config *rest.Config
+	config, err := getClusterConfig(*isInCluster, *kubeconfig)
 
-	kubeClient, err := createClient(*isInCluster, &clientConfig)
+	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		glog.Fatalf("Failed to create kubernetes client: %v", err)
 	}
@@ -44,39 +44,31 @@ func main() {
 	//}
 
 	//if !namespaceGiven {
-	//	watchNamespace = api.NamespaceAll
+	//	watchNamespace = v1.NamespaceAll
 	//}
 
-	ingressController, err := NewIngressController(kubeClient, *svcFallback)
+	ingressController, err := NewIngressController(clientset, *svcFallback)
 	if err != nil {
 		glog.Fatalf("Could not create ingress controller: %v", err)
 	}
 
 	ingressController.RunHealthz(8080)
-	ingressController.WatchNamespace(api.NamespaceAll)
+	ingressController.WatchNamespace(v1.NamespaceAll)
 }
 
-func createClient(isInCluster bool, clientConfig *clientcmd.ClientConfig) (*unversioned.Client, error) {
-	// Generate an in-cluster client when possible
+func getClusterConfig(isInCluster bool, kubeconfig string) (*rest.Config, error) {
 	if isInCluster {
-		kubeClient, err := unversioned.NewInCluster()
+		config, err := rest.InClusterConfig()
 		if err != nil {
-			return nil, fmt.Errorf("Could not initialize in-cluster client: %v", err)
+			return nil, fmt.Errorf("Could not initialize in-cluster context: %v", err)
 		}
-
-		return kubeClient, nil
+		return config, nil
 	}
 
-	// Otherwise, manually initialize one
-	kubeConfig, err := clientConfig.ClientConfig()
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		return nil, fmt.Errorf("Could not create client configuration: %v", err)
+		return nil, fmt.Errorf("Could not use current context from %s: %v", kubeconfig, err)
 	}
 
-	kubeClient, err := unversioned.New(kubeConfig)
-	if err != nil {
-		return nil, fmt.Errorf("Could not initialize generic client: %v", err)
-	}
-
-	return kubeClient, nil
+	return config, nil
 }
