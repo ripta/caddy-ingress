@@ -30,8 +30,10 @@ func main() {
 	glog.Infof("Caddy Ingress Controller version %v", version)
 	flag.Parse()
 
-	var config *rest.Config
 	config, err := getClusterConfig(*isInCluster, *kubeconfig)
+	if err != nil {
+		glog.Fatalf("Failed to get cluster configuration: %v", err)
+	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
