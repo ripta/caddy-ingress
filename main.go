@@ -54,8 +54,8 @@ func main() {
 		glog.Fatalf("Could not create ingress controller: %v", err)
 	}
 
-	go ingressController.RunHealthz(8080)
-	go ingressController.WatchNamespace(v1.NamespaceAll)
+	//go ingressController.RunHealthz(8080)
+	ingressController.WatchNamespace(v1.NamespaceAll)
 }
 
 func getClusterConfig(isInCluster bool, kubeconfig string) (*rest.Config, error) {

@@ -6,6 +6,8 @@ import (
 
 	"github.com/golang/glog"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api/v1"
+	extv1beta1 "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/kubernetes/pkg/healthz"
 )
 
@@ -19,6 +21,10 @@ func NewIngressController(clientset *kubernetes.Clientset, svcFallback string) (
 		clientset:   clientset,
 		svcFallback: svcFallback,
 	}, nil
+}
+
+func (c *CaddyIngressController) ListIngresses(namespace string, opts v1.ListOptions) (*extv1beta1.IngressList, error) {
+	return c.clientset.ExtensionsV1beta1().Ingresses(namespace).List(opts)
 }
 
 func (c *CaddyIngressController) RunHealthz(port int) {
@@ -42,8 +48,21 @@ func (c *CaddyIngressController) RunHealthz(port int) {
 	glog.Fatal(server.ListenAndServe())
 }
 
-func (c *CaddyIngressController) WatchNamespace(namespace string) {
+func (c *CaddyIngressController) Stop() error {
+	return nil
 }
 
-func (c *CaddyIngressController) Stop() {
+func (c *CaddyIngressController) WatchNamespace(namespace string) {
+	glog.Infof("Listing ingresses in namespace %v", namespace)
+
+	ingresses, err := c.ListIngresses(namespace, v1.ListOptions{})
+	if err != nil {
+		glog.Errorf("Could not list ingresses: %v", err)
+		return
+	}
+
+	glog.Infof("Found %d ingresses (ResourceVersion %v)", len(ingresses.Items), ingresses.ListMeta.ResourceVersion)
+	for ingress, idx := range ingresses.Items {
+		glog.Infof(" #%d: %v", idx, ingress)
+	}
 }
